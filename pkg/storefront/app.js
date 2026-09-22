@@ -33,6 +33,14 @@ async function callJson(req, url, body) {
   return { ok: response.ok, status: response.status, payload }
 }
 
+function validReservation({ showId, seats, currency = 'USD', idempotencyKey }) {
+  return !(typeof showId !== 'string' || !showId || showId.length > 100 ||
+      typeof idempotencyKey !== 'string' || !idempotencyKey || idempotencyKey.length > 200 ||
+      !Array.isArray(seats) || seats.length === 0 || seats.length > 36 ||
+      !seats.every(s => typeof s === 'string' && /^[ABC](?:[1-9]|1[0-2])$/.test(s)) ||
+      new Set(seats).size !== seats.length || !['USD', 'EUR', 'GBP'].includes(currency))
+}
+
 const app = express()
 app.use(express.json())
 
@@ -43,11 +51,7 @@ app.get('/healthz', (_req, res) => res.json({ status: 'ok' }))
 app.post('/reservations', async (req, res, next) => {
   try {
     const { showId, seats, currency = 'USD', idempotencyKey } = req.body || {}
-    if (typeof showId !== 'string' || !showId || showId.length > 100 ||
-        typeof idempotencyKey !== 'string' || !idempotencyKey || idempotencyKey.length > 200 ||
-        !Array.isArray(seats) || seats.length === 0 || seats.length > 36 ||
-        !seats.every(s => typeof s === 'string' && /^[ABC](?:[1-9]|1[0-2])$/.test(s)) ||
-        new Set(seats).size !== seats.length || !['USD', 'EUR', 'GBP'].includes(currency)) {
+    if (!validReservation(req.body || {})) {
       return res
         .status(400)
         .json({ error: 'showId, a non-empty seats array and idempotencyKey are required' })
