@@ -1,0 +1,3 @@
+# Where the Signadot CLI finds this repository's Smart Tests.
+smart_tests:
+- smart-tests/

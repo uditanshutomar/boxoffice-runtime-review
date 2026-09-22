@@ -1,0 +1,56 @@
+# MCP tools are configured in CodeRabbit Connections, not in this file.
+# Reviews use get_sandbox to read the developer-created sandbox and hosted test summary.
+knowledge_base:
+  mcp:
+    usage: enabled
+reviews:
+  review_details: true
+  request_changes_workflow: true
+  auto_review:
+    enabled: true
+  pre_merge_checks:
+    custom_checks:
+      - name: "Verified in the current sandbox"
+        mode: error
+        instructions: |
+          Verify runtime evidence for this repository, this PR number and its
+          current full head commit SHA. Obtain these from the PR context, not
+          from an author's claim. If any is unavailable, report Inconclusive.
+
+          Compute the sandbox name as "box-" plus the first 20 lowercase hex
+          characters of SHA-256 of the UTF-8 string
+          "<lowercase owner/repo>#<PR number>@<full head SHA>", with no newline.
+          Call get_sandbox with that exact name. Do not search a sandbox list.
+          Its response wraps the record under sandbox; inspect that record's
+          spec and status.testExecutions, not just a prose summary. A
+          get_workload_object lookup of forkOf returns the baseline workload;
+          its different image is expected, not proof of a wrong sandbox image.
+          Confirm its signadot/github-repo and signadot/github-pull-request
+          labels match the PR, and boxoffice/revision equals the full head SHA.
+          Confirm the single fork's complete image reference ends in @sha256:<64 hex characters>
+          and matches the digest reported by the successful "Build PR image"
+          workflow run for that head commit. Missing build identity is
+          Inconclusive, never a pass. A lesson tag is insufficient.
+
+          Pass only when status.ready is true AND status.testExecutions has:
+          - at least one succeeded execution;
+          - zero pending, in_progress, failed and canceled executions;
+          - at least five passed checks and zero failed checks;
+          - zero red traffic differences.
+          Missing testExecutions, checks or trafficDiffs means no verification, not success.
+          phaseCounts is an array of {phase, count}; an omitted count is zero.
+          In a present checks or trafficDiffs summary, omitted numeric counters
+          such as failed and red are zero (the SDK serializes them with omitempty).
+          This does not make an absent testExecutions, checks or trafficDiffs object a pass.
+          A succeeded execution may contain failed checks: inspect both.
+          Reject unknown phases or malformed counts. A running test is not a pass.
+
+          State the exact name, repository, revision, image digest, readiness,
+          execution counts, check counts and traffic difference counts read.
+          Missing or ambiguous evidence is Inconclusive, not verification.
+          Inconclusive alone does not block a PR.
+          Explain what is missing. Report observed failures without
+          assuming every failure is a source-code bug; infrastructure can fail.
+          Runtime evidence supplements static findings. Do not weaken assertions
+          merely to accept changed behavior. Intended contract changes require
+          an explicit design decision and independent test review.

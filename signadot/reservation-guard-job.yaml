@@ -1,0 +1,45 @@
+# Node.js 18+ is required in the selected Job Runner Group.
+# Usage (baseline): signadot job submit -f signadot/reservation-guard-job.yaml --set runnerGroup=boxoffice-tests --set sandbox= --attach
+# Usage (sandbox): add --set sandbox=<name>
+spec:
+  namePrefix: reservation-guard
+  runnerGroup: "@{runnerGroup}"
+  script: |
+    #!/bin/sh
+    set -eu
+    node <<'NODE'
+    const assert = require('node:assert/strict')
+    const base = process.env.BOXOFFICE_BASE_URL || 'http://storefront.boxoffice.svc:8080'
+    async function request(body) {
+      const res = await fetch(base + '/reservations', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body), signal: AbortSignal.timeout(10000),
+      })
+      const payload = await res.json()
+      console.log(`POST /reservations -> HTTP ${res.status} ${JSON.stringify(payload)}`)
+      return { code: res.status, body: payload }
+    }
+    async function main() {
+      console.log(`sandbox=${process.env.SIGNADOT_SANDBOX_NAME || 'baseline'}`)
+      const input = { showId: 'show-1', seats: ['C11', 'C12'], currency: 'USD', idempotencyKey: 'guard-hold-v2' }
+      const held = await request(input)
+      assert.equal(held.code, 201, 'a valid reservation must return 201')
+      assert.match(held.body.reservationId, /^rsv_[a-f0-9]+$/)
+      assert.equal(held.body.status, 'held')
+      assert.deepEqual(held.body.seats, input.seats)
+      assert.ok(Date.parse(held.body.expiresAt) > Date.now(), 'hold must expire in the future')
+      assert.equal(held.body.idempotencyKey, input.idempotencyKey)
+      assert.deepEqual(held.body.quote, { currency: 'USD', subtotal: 5000, fees: 250, total: 5250 })
+      assert.deepEqual(await request(input), held, 'active-hold retry must be identical')
+      const conflict = await request({ ...input, idempotencyKey: 'guard-conflict-v2' })
+      assert.equal(conflict.code, 409, 'already-held seats must return 409; 5xx is not a passing conflict test')
+      assert.equal(conflict.body.error, 'seats are not available')
+      assert.deepEqual(conflict.body.unavailable, input.seats)
+      console.log('PASS: hold, fees, idempotent retry and conflict contract')
+    }
+    main().catch(err => { console.error('FAIL:', err.message); process.exitCode = 1 })
+    NODE
+  routingContext:
+    sandbox: "@{sandbox}"
+  trafficManager:
+    injectRoutingKey: auto

@@ -1,0 +1,35 @@
+# Runs one service from a lesson image against the rest of the cluster as it is.
+# Every lesson is a tag on a service's image, so this one spec covers all of them.
+#
+# Usage:
+#   signadot sandbox apply -f signadot/lesson-sandbox.yaml \
+#     --set cluster=<cluster> --set registry=signadot \
+#     --set service=storefront --set lesson=swallow-errors
+name: "@{service}-@{lesson}"
+spec:
+  cluster: "@{cluster}"
+  description: "boxoffice @{service} running the @{lesson} lesson"
+  labels:
+    demo: boxoffice
+  # Long enough that a reader working through a tutorial does not lose the
+  # sandbox midway and see a check fail for the wrong reason.
+  ttl:
+    duration: 8h
+  forks:
+    - forkOf:
+        kind: Deployment
+        namespace: boxoffice
+        name: "@{service}"
+      customizations:
+        env:
+          - container: "@{service}"
+            operation: upsert
+            name: CACHE_NAMESPACE
+            value: "@{service}-@{lesson}"
+        images:
+          - image: "@{registry}/boxoffice-demo-@{service}:@{lesson}"
+            container: "@{service}"
+  defaultRouteGroup:
+    endpoints:
+      - name: storefront
+        target: http://storefront.boxoffice.svc:8080

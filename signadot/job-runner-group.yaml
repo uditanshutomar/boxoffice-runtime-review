@@ -1,0 +1,11 @@
+# One-time setup by a Signadot admin, on the intended tutorial cluster.
+# Usage: signadot jobrunnergroup apply -f signadot/job-runner-group.yaml --set cluster=<cluster>
+name: boxoffice-tests
+spec:
+  cluster: "@{cluster}"
+  namespace: boxoffice
+  image: node:22-alpine
+  jobTimeout: 5m
+  scaling:
+    manual:
+      desiredPods: 1
