@@ -55,13 +55,8 @@ app.post('/reservations', async (req, res, next) => {
 
     const held = await callJson(req, `${INVENTORY_URL}/reservations`, { showId, seats, idempotencyKey })
     if (!held.ok) {
-      // The caller has to learn that no seats were taken. Passing the status
-      // through keeps a conflict a conflict and a fault a fault.
-      console.error('inventory refused the reservation', held.status, held.payload)
-      return res.status(held.status).json({
-        error: held.payload.error || 'could not hold the requested seats',
-        unavailable: held.payload.unavailable,
-      })
+      // Keep the quote available so the client can offer another selection.
+      console.warn('inventory refused the reservation', held.status)
     }
 
     const priced = await callJson(req, `${PRICING_URL}/quotes`, { showId, seats, currency })
